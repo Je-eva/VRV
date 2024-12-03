@@ -2,77 +2,79 @@ import re
 import csv
 from collections import defaultdict
 
-# Threshold for flagging suspicious login attempts
-FAILED_LOGIN_THRESHOLD = 10  
+# Defines a constant for identifying suspicious login attempts based on failed login count
+MAX_FAILED_LOGINS = 10  
 
-def parse_log(file_path):
-    """ Reads log data from a file and returns it as a list of lines. """
+def read_log_file(file_path):
+    """Reads the log file and returns all the lines as a list."""
     with open(file_path, 'r') as file:
         return file.readlines()
 
-def analyze_logs(log_data):
-    """ Analyzes log data to count requests per IP, endpoint access, and failed logins. """
-    ip_request_counts = defaultdict(int)
-    endpoint_access_counts = defaultdict(int)
-    failed_logins = defaultdict(int)
+def process_logs(log_entries):
+    """Processes the log entries and calculates statistics about IP requests, endpoints, and failed logins."""
+    ip_statistics = defaultdict(int)
+    endpoint_statistics = defaultdict(int)
+    failed_attempts = defaultdict(int)
 
-    # Regex pattern to extract IP, endpoint, and status code
+    # Regular expression pattern to extract the IP address, HTTP method, endpoint, and status code from each log entry
     log_pattern = r'(?P<ip>\d+\.\d+\.\d+\.\d+).+"(?P<method>[A-Z]+) (?P<endpoint>/[^\s]*) HTTP.*" (?P<status>\d+)'
 
-    for log_entry in log_data:
-        match = re.search(log_pattern, log_entry)
+    for entry in log_entries:
+        match = re.search(log_pattern, entry)
         if match:
             ip = match.group('ip')
             endpoint = match.group('endpoint')
-            status_code = int(match.group('status'))
+            status = int(match.group('status'))
 
-            ip_request_counts[ip] += 1
-            endpoint_access_counts[endpoint] += 1
+            # Increment counts for IP requests and endpoint accesses
+            ip_statistics[ip] += 1
+            endpoint_statistics[endpoint] += 1
 
-            if status_code == 401:  # Increment failed login count for unauthorized attempts
-                failed_logins[ip] += 1
+            # Track failed login attempts (status code 401)
+            if status == 401:
+                failed_attempts[ip] += 1
 
-    return ip_request_counts, endpoint_access_counts, failed_logins
+    return ip_statistics, endpoint_statistics, failed_attempts
 
-def save_to_csv(ip_counts, endpoint_counts, failed_logins, output_file):
-    """  Saves the analysis results to a CSV file. """
-    with open(output_file, 'w', newline='') as csvfile:
-        writer = csv.writer(csvfile)
+def export_to_csv(ip_stats, endpoint_stats, failed_logins, output_filepath):
+    """Exports the analysis results into a CSV file."""
+    with open(output_filepath, 'w', newline='') as file:
+        writer = csv.writer(file)
 
-        # Write requests per IP
+        # Writing IP request counts
         writer.writerow(["IP Address", "Request Count"])
-        writer.writerows(ip_counts.items())
+        writer.writerows(ip_stats.items())
         writer.writerow([])
 
-        # Write endpoint access counts
+        # Writing endpoint access statistics
         writer.writerow(["Endpoint", "Access Count"])
-        writer.writerows(endpoint_counts.items())
+        writer.writerows(endpoint_stats.items())
         writer.writerow([])
 
-        # Write failed login attempts that exceed the threshold
+        # Writing failed login attempts that exceed the defined threshold
         writer.writerow(["IP Address", "Failed Login Count"])
-        writer.writerows((ip, count) for ip, count in failed_logins.items() if count > FAILED_LOGIN_THRESHOLD)
+        writer.writerows((ip, count) for ip, count in failed_logins.items() if count > MAX_FAILED_LOGINS)
 
-def main():
-    """ Main function to parse, analyze, and save log analysis results. """
-    log_data = parse_log('sample.log')  # Read the log file
-    ip_counts, endpoint_counts, failed_logins = analyze_logs(log_data)
+def run_analysis():
+    """Main function to read logs, process them, and export the results."""
+    log_entries = read_log_file('sample.log')  # Load log data
+    ip_stats, endpoint_stats, failed_logins = process_logs(log_entries)
 
-    # Print summary of analysis
-    print("Requests Per IP:")
-    for ip, count in sorted(ip_counts.items(), key=lambda x: x[1], reverse=True):
+    # Display summary of log analysis
+    print("IP Address Request Counts:")
+    for ip, count in sorted(ip_stats.items(), key=lambda x: x[1], reverse=True):
         print(f"{ip}: {count}")
 
-    most_accessed = max(endpoint_counts.items(), key=lambda x: x[1])
-    print(f"\nMost Accessed Endpoint:\n{most_accessed[0]} (Accessed {most_accessed[1]} times)")
+    most_visited_endpoint = max(endpoint_stats.items(), key=lambda x: x[1])
+    print(f"\nMost Accessed Endpoint:\n{most_visited_endpoint[0]} (Accessed {most_visited_endpoint[1]} times)")
 
-    print("\nSuspicious Activity:")
+    print("\nIdentifying Suspicious Activity:")
     for ip, count in failed_logins.items():
-        if count > FAILED_LOGIN_THRESHOLD:
-            print(f"{ip}: {count} failed attempts")
+        if count > MAX_FAILED_LOGINS:
+            print(f"{ip}: {count} failed login attempts")
 
-    # Save results to a CSV file
-    save_to_csv(ip_counts, endpoint_counts, failed_logins, 'log_analysis_results.csv')
+    # Save the results to a CSV file
+    export_to_csv(ip_stats, endpoint_stats, failed_logins, 'log_analysis_output.csv')
 
 if __name__ == "__main__":
-    main()
+    run_analysis()
